@@ -1,6 +1,4 @@
 # SAT solver
-Install the [Sympy library](https://docs.sympy.org)
-`pip install -r requirements.txt`
 
 ## Project 1 (SAT)
 Sudoku example
