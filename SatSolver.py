@@ -19,12 +19,17 @@ def read_dimacs_file():
     #You can see the example as rules as well. We can throw all the rules together and then apply the algortihm to it
     all_clauses = example.clauses + rules.clauses
 
-    #remove rules bigger than 4x4
-    #for clause in rules.clauses:
-    #  if int(str(clause)[0]).startswith(range(int(str(example.num_vars)[0]),int(str())):
+    #create a dictionary with keys as every option in sodoku and value yet to be assigned
+    num_digits = len(str(example.num_vars))
+    minimal_literal = int(num_digits*str(1))
+    maximal_literal = int(num_digits * str(str(example.num_vars)[0]))
+    value = None
+    assignment = {k:value for k in range(minimal_literal, maximal_literal + 1)}
+    #we can set the literals already to true of it is in the example
+    for givenSudokuNum in example.clauses:
+      assignment[givenSudokuNum[0]] = True
 
-
-    return example.clauses, rules.clauses
+    return example.clauses, rules.clauses, assignment
 
   except Exception as e:
     # Report error.
@@ -64,56 +69,62 @@ def encode_sudoku(input_dir: str, file_name: str, output_dir: str):
       output_file.write("".join(clause) + " 0\n")
     output_file.close()
 
-def select_absolute_literal(cnf):
-  for clause in cnf:
+#def newClause(oldClause, newClause):
+
+
+def dpll(clauses, assignment):
+  print(len(clauses))
+  # The following code is derived from slide 10 of '2a Davis Putnam'
+  # 1.1 remove tautologies
+  clausesToRemove = []
+  for clause in clauses:
     for literal in clause:
-      return literal
+      if -literal in clause:
+        clausesToRemove.append(clause)
 
+  if clausesToRemove != []:
+    clauses.remove(clause)
 
-def difference(list1, list2):
-  if type(list2) == int:
-    list2=[list2]
-  return (list(list(set(list1)-set(list2)) + list(set(list2)-set(list1))))
+  print("after Taut: ",len(clauses))
+  looping(clauses, assignment)
 
-def dpll(cnf, assignments=[]):
-  print("assignments: ", assignments, "   with len cnf: ",len(cnf))
+def looping(clauses, assignment):
+  # 1.2
+  flat_clauses = [l for clause in clauses for l in clause]
+  pure_literals = [l for l in flat_clauses if -l not in flat_clauses]
+  #iterate over all pure literals
+  for pure in pure_literals:
+    clausesToRemove = []
+    for clause in clauses:
+      #if a pure literal occurs in a clause it should remove that literal from that clause if
+      # it is negative, otherwise (positive) remove whole clause
+      #TODO: not sure what to do here
+      if pure in clause:
+        # if pure.startswith('-'):
+        #   clause.remove(pure)
+        # else:
+        #   clausesToRemove.append(clause)
+        assignment[abs(pure)] = True
 
-  if len(cnf) == 0:
-    print("done with: ", assignments)
-    return assignments
+      #clauses.remove(clausesToRemove)
 
-  if any([len(c) == 0 for c in cnf]):
-    return False, None
+  #1.3 unit clause
+  for clause in clauses:
+    clausesToRemove = []
+    if len(clause) == 1:
+      assignment[clause[0]] = True
+      clausesToRemove.append(clause)
 
-  lit = select_absolute_literal(cnf)
+  if clausesToRemove != []:
+    clauses.remove(clausesToRemove)
 
-  new_cnf = [c for c in cnf if abs(lit) not in c]
-  new_cnf = [difference(c, -abs(lit)) for c in new_cnf]
-  new_assignments = assignments + [[abs(lit)]]
-
-  #remove duplicates
-  new_assignments = [list(x) for x in set(frozenset(y) for y in new_assignments)]
-  #do new loop
-  sat, vals = dpll(new_cnf, new_assignments)
-
-
-  if sat:
-    return sat, vals
-
-  new_cnf = [c for c in cnf if -abs(lit) not in c]
-
-  new_cnf = [difference(c, abs(lit)) for c in new_cnf]
-  new_assignments = assignments + [[-abs(lit)]]
-
-  #remove duplicates
-  new_assignments = [list(x) for x in set(frozenset(y) for y in new_assignments)]
-  #do new loop
-  sat, vals = dpll(new_cnf, new_assignments)
-
-  if sat:
-    return sat, vals
-
-  return False, None
+  print("after Unit: ",len(clauses))
+  if len(clauses) != 0:
+    looping(clauses, assignment)
+  else:
+    return assignment
+    #return all the literals with true assigned, those are the numbers to be filled in sudoku
+    #return([k for k, v in assignment.items() if assignment[k]==True])
 
 
 if __name__ == '__main__':
@@ -121,7 +132,59 @@ if __name__ == '__main__':
   file_name = '4x4.txt'
   output_dir = "encoded"
   encode_sudoku(input_dir, file_name, output_dir)
-  example, rule = read_dimacs_file()
+  example, rule, assignment = read_dimacs_file()
   print(example)
-  dpll(rule, example)
+  rules = dpll(rule, assignment)
+  print(rules)
 
+
+#  def select_absolute_literal(cnf):
+#   for clause in cnf:
+#     for literal in clause:
+#       return literal
+#
+#
+# def difference(list1, list2):
+#   if type(list2) == int:
+#     list2=[list2]
+#   return (list(list(set(list1)-set(list2)) + list(set(list2)-set(list1))))
+#
+# def dpll(cnf, assignments=[]):
+#   print("assignments: ", assignments, "   with len cnf: ",len(cnf))
+#
+#   if len(cnf) == 0:
+#     print("done with: ", assignments)
+#     return assignments
+#
+#   if any([len(c) == 0 for c in cnf]):
+#     return False, None
+#
+#   lit = select_absolute_literal(cnf)
+#
+#   new_cnf = [c for c in cnf if abs(lit) not in c]
+#   new_cnf = [difference(c, -abs(lit)) for c in new_cnf]
+#   new_assignments = assignments + [[abs(lit)]]
+#
+#   #remove duplicates
+#   new_assignments = [list(x) for x in set(frozenset(y) for y in new_assignments)]
+#   #do new loop
+#   sat, vals = dpll(new_cnf, new_assignments)
+#
+#
+#   if sat:
+#     return sat, vals
+#
+#   new_cnf = [c for c in cnf if -abs(lit) not in c]
+#
+#   new_cnf = [difference(c, abs(lit)) for c in new_cnf]
+#   new_assignments = assignments + [[-abs(lit)]]
+#
+#   #remove duplicates
+#   new_assignments = [list(x) for x in set(frozenset(y) for y in new_assignments)]
+#   #do new loop
+#   sat, vals = dpll(new_cnf, new_assignments)
+#
+#   if sat:
+#     return sat, vals
+#
+#   return False, None
