@@ -1,5 +1,6 @@
 import sys
 import mxklabs.dimacs
+import numpy as np
 import os
 import re
 import math
@@ -69,62 +70,99 @@ def encode_sudoku(input_dir: str, file_name: str, output_dir: str):
       output_file.write("".join(clause) + " 0\n")
     output_file.close()
 
-#def newClause(oldClause, newClause):
+def rewrite_clause(clauses, assignment, literals, is_pure_literal):
+  for literal in literals:
+    #This code is refactored from Tirz
+    #TODO: remove this commented line and the line above
+
+    value = False if str(literal).startswith('-') else True
+
+    if (assignment[abs(literal)] == None or assignment[abs(literal)] == value):
+      assignment[abs(literal)] = value
+
+      new_clauses = []
+      for clause in clauses:
+        if -literal in clause:
+          clause.remove(-literal)
+          new_clauses.append(clause)
+        elif (literal not in clause) and (-literal not in clause):
+          new_clauses.append(clause)
+
+      if len(new_clauses) != 0:
+        clauses = new_clauses
+
+    elif not is_pure_literal:
+        return clauses, False
+
+  return clauses, assignment
+
 
 
 def dpll(clauses, assignment):
   print(len(clauses))
   # The following code is derived from slide 10 of '2a Davis Putnam'
   # 1.1 remove tautologies
-  clausesToRemove = []
   for clause in clauses:
     for literal in clause:
       if -literal in clause:
-        clausesToRemove.append(clause)
+        clauses.remove(clause)
 
-  if clausesToRemove != []:
-    clauses.remove(clause)
 
   print("after Taut: ",len(clauses))
   looping(clauses, assignment)
 
 def looping(clauses, assignment):
-  # 1.2
+  # 1.2 check pure literals
+  #However, checking pure literals for first loop seems redundant as there is no pure literal present initially
   flat_clauses = [l for clause in clauses for l in clause]
   pure_literals = [l for l in flat_clauses if -l not in flat_clauses]
+
   #iterate over all pure literals
-  for pure in pure_literals:
-    clausesToRemove = []
-    for clause in clauses:
-      #if a pure literal occurs in a clause it should remove that literal from that clause if
-      # it is negative, otherwise (positive) remove whole clause
-      #TODO: not sure what to do here
-      if pure in clause:
-        # if pure.startswith('-'):
-        #   clause.remove(pure)
-        # else:
-        #   clausesToRemove.append(clause)
-        assignment[abs(pure)] = True
+  clauses, assignment = rewrite_clause(clauses, assignment, pure_literals, True)
 
-      #clauses.remove(clausesToRemove)
-
-  #1.3 unit clause
-  for clause in clauses:
-    clausesToRemove = []
-    if len(clause) == 1:
-      assignment[clause[0]] = True
-      clausesToRemove.append(clause)
-
-  if clausesToRemove != []:
-    clauses.remove(clausesToRemove)
-
-  print("after Unit: ",len(clauses))
-  if len(clauses) != 0:
+  #keep going untill there arent pure literals left
+  if len(pure_literals) != 0:
     looping(clauses, assignment)
+
+  #1.3 check unit clauses
+  #take all the literal that are unit clauses and rewrite the clauses where these unit clauses are in
+  unit_literals = [clause[0] for clause in clauses if len(clause) == 1]
+  clauses, assignment = rewrite_clause(clauses, assignment, unit_literals, False)
+
+  #if the above code returns false for the assignment, the sudoku for the literal assingment is not satisfiable
+  if assignment == False:
+    print("UNSAT")
+    return False
+
+  #keep going untill there arent unit clauses left
+  if len(unit_literals) != 0:
+    looping(clauses, assignment)
+
+  #TODO: Suarabh, when I print the clauses here is prints empty lists in a list. This is not what it's supposed to do
+  print(clauses)
+  #TODO: If we print the truth assignment, it is not even close, damn
+  print([k for k, v in assignment.items() if assignment[k]==True])
+  # implement random assignment HERE
+  #set one literal to true to explore if satifiable
+  random_literal = np.random.choice([l for clause in clauses for l in clause])
+  clauses, assignment = rewrite_clause(clauses, assignment, [random_literal])
+
+  current_assignment_satisfiable = looping(clauses, assignment)
+  #if the current assignment is not satisfiable
+  if not current_assignment_satisfiable:
+    clauses, assignment = rewrite_clause(clauses, assignment, [-random_literal], True)
+    return looping(clauses, assignment)
   else:
-    return assignment
-    #return all the literals with true assigned, those are the numbers to be filled in sudoku
-    #return([k for k, v in assignment.items() if assignment[k]==True])
+    print("SATISFIABLE")
+    print("number of clauses ", len(clauses))
+    # return all the literals with true assigned, those are the numbers to be filled in sudoku
+    print("assignment: ", [k for k, v in assignment.items() if assignment[k]==True])
+
+    return True
+
+
+
+
 
 
 if __name__ == '__main__':
@@ -134,8 +172,9 @@ if __name__ == '__main__':
   encode_sudoku(input_dir, file_name, output_dir)
   example, rule, assignment = read_dimacs_file()
   print(example)
-  rules = dpll(rule, assignment)
-  print(rules)
+  clauses = example + rule
+  rules = dpll(clauses, assignment)
+
 
 
 #  def select_absolute_literal(cnf):
