@@ -12,7 +12,7 @@ def read_dimacs_file():
   try:
     # Read the DIMACS files
     #input_file = sys.argv[1]
-    input_file = "encoded//top100.sdk.txt-0000.cnf"
+    input_file = "encoded//100 sudokus.txt-0000.cnf"
     example = mxklabs.dimacs.read(input_file)
     rules = mxklabs.dimacs.read("input//sudoku-rules.txt")
     # Print some stats.
@@ -80,19 +80,19 @@ def rewrite_clause(clauses, assignment, literals, is_pure_literal):
     if (assignment[abs(literal)] == None or assignment[abs(literal)] == value):
       assignment[abs(literal)] = value
 
-      new_clauses = []
-      for clause in clauses:
-        if -literal in clause:
-          clause.remove(-literal)
-          new_clauses.append(clause)
-        elif (literal not in clause) and (-literal not in clause):
-          new_clauses.append(clause)
-
-      if len(new_clauses) != 0:
-        clauses = new_clauses
-
     elif not is_pure_literal:
-        return clauses, False
+      return clauses, False
+    new_clauses = []
+    for clause in clauses:
+      if -literal in clause:
+        clause.remove(-literal)
+        new_clauses.append(clause)
+      elif (literal not in clause) and (-literal not in clause):
+        new_clauses.append(clause)
+
+    if len(new_clauses) != 0:
+      clauses = new_clauses
+
 
   return clauses, assignment
 
@@ -110,8 +110,12 @@ def dpll(clauses, assignment):
 
   print("after Taut: ",len(clauses))
   looping(clauses, assignment)
+  return "DOne"
 
 def looping(clauses, assignment):
+  if len(clauses) == 0:
+    print([k for k, v in assignment.items() if assignment[k] == True])
+    return True
   # 1.2 check pure literals
   #However, checking pure literals for first loop seems redundant as there is no pure literal present initially
   flat_clauses = [l for clause in clauses for l in clause]
@@ -138,14 +142,17 @@ def looping(clauses, assignment):
   if len(unit_literals) != 0:
     looping(clauses, assignment)
 
-  #TODO: Suarabh, when I print the clauses here is prints empty lists in a list. This is not what it's supposed to do
-  print(clauses)
-  #TODO: If we print the truth assignment, it is not even close, damn
-  print([k for k, v in assignment.items() if assignment[k]==True])
   # implement random assignment HERE
   #set one literal to true to explore if satifiable
+  if not any(clauses):
+    print("SATISFIABLE")
+    print("number of clauses ", len(clauses))
+    # return all the literals with true assigned, those are the numbers to be filled in sudoku
+    print("assignment: ", [k for k, v in assignment.items() if assignment[k] == True])
+    return True
+
   random_literal = np.random.choice([l for clause in clauses for l in clause])
-  clauses, assignment = rewrite_clause(clauses, assignment, [random_literal])
+  clauses, assignment = rewrite_clause(clauses, assignment, [random_literal], True)
 
   current_assignment_satisfiable = looping(clauses, assignment)
   #if the current assignment is not satisfiable
@@ -167,7 +174,7 @@ def looping(clauses, assignment):
 
 if __name__ == '__main__':
   input_dir = "test_sudokus"
-  file_name = '4x4.txt'
+  file_name = '100 sudokus.txt'
   output_dir = "encoded"
   encode_sudoku(input_dir, file_name, output_dir)
   example, rule, assignment = read_dimacs_file()
