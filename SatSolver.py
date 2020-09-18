@@ -72,10 +72,8 @@ def encode_sudoku(input_dir: str, file_name: str, output_dir: str):
 
 def rewrite_clause(clauses, assignment, literals, is_pure_literal):
   for literal in literals:
-    #This code is refactored from Tirz
-    #TODO: remove this commented line and the line above
 
-    value = False if str(literal).startswith('-') else True
+    value = False if literal < 0 else True
 
     if (assignment[abs(literal)] == None or assignment[abs(literal)] == value):
       assignment[abs(literal)] = value
@@ -109,8 +107,7 @@ def dpll(clauses, assignment):
 
 
   print("after Taut: ",len(clauses))
-  looping(clauses, assignment)
-  return "DOne"
+  return looping(clauses, assignment)
 
 def looping(clauses, assignment):
   if len(clauses) == 0:
@@ -126,7 +123,7 @@ def looping(clauses, assignment):
 
   #keep going untill there arent pure literals left
   if len(pure_literals) != 0:
-    looping(clauses, assignment)
+    return looping(clauses, assignment)
 
   #1.3 check unit clauses
   #take all the literal that are unit clauses and rewrite the clauses where these unit clauses are in
@@ -140,17 +137,13 @@ def looping(clauses, assignment):
 
   #keep going untill there arent unit clauses left
   if len(unit_literals) != 0:
-    looping(clauses, assignment)
+    return looping(clauses, assignment)
 
-  # implement random assignment HERE
-  #set one literal to true to explore if satifiable
   if not any(clauses):
-    print("SATISFIABLE")
-    print("number of clauses ", len(clauses))
-    # return all the literals with true assigned, those are the numbers to be filled in sudoku
-    print("assignment: ", [k for k, v in assignment.items() if assignment[k] == True])
     return True
 
+  # implement random assignment HERE
+  # set one literal to true to explore if satifiable
   random_literal = np.random.choice([l for clause in clauses for l in clause])
   clauses, assignment = rewrite_clause(clauses, assignment, [random_literal], True)
 
