@@ -5,20 +5,18 @@ import os
 import re
 import math
 from typing import IO
+import sys
+from collections import Counter
+sys.setrecursionlimit(12500)
 
 
 
-def read_dimacs_file():
+def read_dimacs_file(input_file):
   try:
     # Read the DIMACS files
     #input_file = sys.argv[1]
-    input_file = "encoded//100 sudokus.txt-0000.cnf"
     example = mxklabs.dimacs.read(input_file)
     rules = mxklabs.dimacs.read("input//sudoku-rules.txt")
-    # Print some stats.
-    print("num_vars=%d, num_clauses=%d" % (example.num_vars, example.num_clauses))
-    #You can see the example as rules as well. We can throw all the rules together and then apply the algortihm to it
-    all_clauses = example.clauses + rules.clauses
 
     #create a dictionary with keys as every option in sodoku and value yet to be assigned
     num_digits = len(str(example.num_vars))
@@ -70,96 +68,143 @@ def encode_sudoku(input_dir: str, file_name: str, output_dir: str):
       output_file.write("".join(clause) + " 0\n")
     output_file.close()
 
-def rewrite_clause(clauses, assignment, literals, is_pure_literal):
-  for literal in literals:
-
-    value = False if literal < 0 else True
-
-    if (assignment[abs(literal)] == None or assignment[abs(literal)] == value):
-      assignment[abs(literal)] = value
-
-    elif not is_pure_literal:
-      return clauses, False
-    new_clauses = []
-    for clause in clauses:
-      if -literal in clause:
-        clause.remove(-literal)
-        new_clauses.append(clause)
-      elif (literal not in clause) and (-literal not in clause):
-        new_clauses.append(clause)
-
-    if len(new_clauses) != 0:
-      clauses = new_clauses
+def rewrite_clause(clauses, assignment, literal, is_pure_literal):
 
 
-  return clauses, assignment
+  value = False if literal < 0 else True
+
+  if (assignment[abs(literal)] == None or assignment[abs(literal)] == value):
+    assignment[abs(literal)] = value
+
+  elif not is_pure_literal:
+    return False, False
+  elif is_pure_literal:
+    return clauses, assignment
+
+  new_clauses = []
+  for clause in clauses:
+    if -literal in clause:
+      clause.remove(-literal)
+      new_clauses.append(clause)
+    elif (literal not in clause) and (-literal not in clause):
+      new_clauses.append(clause)
+
+  return new_clauses, assignment
 
 
 
-def dpll(clauses, assignment):
-  print(len(clauses))
+def dpll(clauses, assignment, type_of_heur):
   # The following code is derived from slide 10 of '2a Davis Putnam'
   # 1.1 remove tautologies
+  numloops = 0
   for clause in clauses:
     for literal in clause:
       if -literal in clause:
         clauses.remove(clause)
 
 
-  print("after Taut: ",len(clauses))
-  return looping(clauses, assignment)
+  return looping(clauses, assignment, numloops, type_of_heur)
 
-def looping(clauses, assignment):
+
+def empty(clauselist):
+    a = 0
+    for clause in clauselist:
+        if not clause:
+            a = a + 1
+    return a
+
+def looping(clauses, assignment, numloops, type_of_heur):
+  numloops += 1
+
   if len(clauses) == 0:
-    print([k for k, v in assignment.items() if assignment[k] == True])
+    print("SATISFIABLE")
+    print("num of loops", numloops)
+    # return all the literals with true assigned, those are the numbers to be filled in sudoku
+    print("assignment: ", [k for k, v in assignment.items() if assignment[k] == True])
     return True
-  # 1.2 check pure literals
-  #However, checking pure literals for first loop seems redundant as there is no pure literal present initially
-  flat_clauses = [l for clause in clauses for l in clause]
-  pure_literals = [l for l in flat_clauses if -l not in flat_clauses]
-
-  #iterate over all pure literals
-  clauses, assignment = rewrite_clause(clauses, assignment, pure_literals, True)
-
-  #keep going untill there arent pure literals left
-  if len(pure_literals) != 0:
-    return looping(clauses, assignment)
-
-  #1.3 check unit clauses
-  #take all the literal that are unit clauses and rewrite the clauses where these unit clauses are in
-  unit_literals = [clause[0] for clause in clauses if len(clause) == 1]
-  clauses, assignment = rewrite_clause(clauses, assignment, unit_literals, False)
-
-  #if the above code returns false for the assignment, the sudoku for the literal assingment is not satisfiable
-  if assignment == False:
-    print("UNSAT")
+  a = empty(clauses)
+  if a > 0:
+    print('empty')
     return False
 
-  #keep going untill there arent unit clauses left
-  if len(unit_literals) != 0:
-    return looping(clauses, assignment)
-
-  if not any(clauses):
-    return True
-
-  # implement random assignment HERE
-  # set one literal to true to explore if satifiable
-  random_literal = np.random.choice([l for clause in clauses for l in clause])
-  clauses, assignment = rewrite_clause(clauses, assignment, [random_literal], True)
-
-  current_assignment_satisfiable = looping(clauses, assignment)
-  #if the current assignment is not satisfiable
-  if not current_assignment_satisfiable:
-    clauses, assignment = rewrite_clause(clauses, assignment, [-random_literal], True)
-    return looping(clauses, assignment)
   else:
-    print("SATISFIABLE")
-    print("number of clauses ", len(clauses))
-    # return all the literals with true assigned, those are the numbers to be filled in sudoku
-    print("assignment: ", [k for k, v in assignment.items() if assignment[k]==True])
+
+    #1.3 check unit clauses
+    #take all the literal that are unit clauses and rewrite the clauses where these unit clauses are in
+    unit_literals = [clause[0] for clause in clauses if len(clause) == 1]
+    for ul in unit_literals:
+      clauses, assignment = rewrite_clause(clauses, assignment, ul, False)
+
+    #if the above code returns false for the assignment, the sudoku for the literal assingment is not satisfiable
+    if assignment == False:
+      print("UNSAT")
+      return False
+
+    #keep going untill there arent unit clauses left
+    if len(unit_literals) != 0:
+      return looping(clauses, assignment, numloops, type_of_heur)
+
+    # 1.2 check pure literals
+    #However, checking pure literals for first loop seems redundant as there is no pure literal present initially
+    flat_clauses = [l for clause in clauses for l in clause]
+    pure_literals = [l for l in flat_clauses if -l not in flat_clauses]
+
+    #iterate over all pure literals
+    for pl in pure_literals:
+      clauses, assignment = rewrite_clause(clauses, assignment, pl, True)
+
+    #keep going untill there arent pure literals left
+    if len(pure_literals) != 0:
+      return looping(clauses, assignment, numloops, type_of_heur)
+
+    if type_of_heur == "heur1":
+      chosen_literal = MOM_heuristic1(clauses)
+    elif type_of_heur == "heur2":
+      chosen_literal = MOM_heuristic2(clauses)
+    else:
+      chosen_literal = random_assignment(clauses)
+    print(chosen_literal)
+
+    new_clauses, new_assignment = rewrite_clause(clauses, assignment, chosen_literal, False)
+    #current_sat_satisfied =
+    # if the current assignment is not satisfiable
+    if looping(new_clauses, new_assignment, numloops, type_of_heur) == False:
+      print(0)
+      chosen_literal = -chosen_literal
+      new_clauses, new_assignment = rewrite_clause(clauses, assignment, (-int(chosen_literal)), True)
+      return looping(new_clauses, new_assignment, numloops, type_of_heur)
+
 
     return True
 
+
+def random_assignment(clauses):
+  # set one literal to true to explore if satifiable
+  random_literal = int(np.random.choice([l for clause in clauses for l in clause]))
+  return random_literal
+
+def MOM_heuristic1(clauses):
+  #implementing the normal MOM formula: [f∗(x) + f∗(¬x)] ∗ 2k + f∗(x) ∗ f∗(¬x)
+  # first determine what the size is of the smallest clauses
+  smallest_size_clause = min(set([len(clause) for clause in clauses]))
+  #select only the literals which are in the smallest clauses, and then count all these values
+  counted_lits_in_smallest_clauses = Counter([l for clause in clauses for l in clause if len(clause) == smallest_size_clause])
+  score_mom_heur = dict()
+  k = 10
+  for key, count in list(counted_lits_in_smallest_clauses.items()):
+    #here is the function
+    score = (count + counted_lits_in_smallest_clauses[-key]) * 2^k + count * counted_lits_in_smallest_clauses[-key]
+    # delete the opposite count of the literal, as this is not necessary to perform the formula, becuase it will give the same value as the intitial literal
+    del counted_lits_in_smallest_clauses[-key]
+    #add the score of the literal to the dict
+    score_mom_heur[abs(key)] = score
+  print(max(score_mom_heur, key=score_mom_heur.get))
+  #return the key with the maximal value in the dict
+  return max(score_mom_heur, key=score_mom_heur.get)
+
+def MOM_heuristic2(clauses):
+  # still to be implemented
+  return 0
 
 
 
@@ -169,11 +214,12 @@ if __name__ == '__main__':
   input_dir = "test_sudokus"
   file_name = '100 sudokus.txt'
   output_dir = "encoded"
-  encode_sudoku(input_dir, file_name, output_dir)
-  example, rule, assignment = read_dimacs_file()
-  print(example)
+  #encode_sudoku(input_dir, file_name, output_dir)
+  example, rule, assignment = read_dimacs_file("encoded//100 sudokus.txt-0000.cnf")
+
   clauses = example + rule
-  rules = dpll(clauses, assignment)
+  heuristic = "heur12"
+  dpll(clauses, assignment, heuristic)
 
 
 
@@ -202,12 +248,12 @@ if __name__ == '__main__':
 #
 #   new_cnf = [c for c in cnf if abs(lit) not in c]
 #   new_cnf = [difference(c, -abs(lit)) for c in new_cnf]
-#   new_assignments = assignments + [[abs(lit)]]
+#   assignments = assignments + [[abs(lit)]]
 #
 #   #remove duplicates
-#   new_assignments = [list(x) for x in set(frozenset(y) for y in new_assignments)]
+#   assignments = [list(x) for x in set(frozenset(y) for y in assignments)]
 #   #do new loop
-#   sat, vals = dpll(new_cnf, new_assignments)
+#   sat, vals = dpll(new_cnf, assignments)
 #
 #
 #   if sat:
@@ -216,12 +262,12 @@ if __name__ == '__main__':
 #   new_cnf = [c for c in cnf if -abs(lit) not in c]
 #
 #   new_cnf = [difference(c, abs(lit)) for c in new_cnf]
-#   new_assignments = assignments + [[-abs(lit)]]
+#   assignments = assignments + [[-abs(lit)]]
 #
 #   #remove duplicates
-#   new_assignments = [list(x) for x in set(frozenset(y) for y in new_assignments)]
+#   assignments = [list(x) for x in set(frozenset(y) for y in assignments)]
 #   #do new loop
-#   sat, vals = dpll(new_cnf, new_assignments)
+#   sat, vals = dpll(new_cnf, assignments)
 #
 #   if sat:
 #     return sat, vals
