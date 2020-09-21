@@ -7,7 +7,9 @@ import re
 import math
 from typing import IO
 import sys
+import csv
 from collections import Counter
+from datetime import datetime
 sys.setrecursionlimit(12500)
 
 def read_dimacs_file(input_file):
@@ -90,21 +92,19 @@ def rewrite_clause(clauses, assignment, literal, backtrack_allowence_bool):
     return new_clauses, assignment
 
 
-def looping(clauses, assignment, type_of_heur, numloops):
-    numloops+=1
-    are_empty_clauses = len([clause for clause in clauses if not clause]) > 0
-    if are_empty_clauses:
-        return False
+def looping(clauses, assignment, type_of_heur, num_loops, num_assigns, num_backtrack):
 
-    if len(clauses) == 0:
+    num_loops+=1
+    are_empty_clauses = len([clause for clause in clauses if not clause]) > 0
+    if are_empty_clauses: return False
+    elif len(clauses) == 0:
         print("SATISFIED with assignment: ", [k for k, v in assignment.items() if assignment[k] == True])
-        print("number of loops: ", numloops)
         return True
 
 
     # 1.2 check pure literals
     # However, checking pure literals for first loop seems redundant as there is no pure literal present initially
-    if numloops != 0:
+    if num_loops != 0:
         flat_clauses = [l for clause in clauses for l in clause]
         pure_literals = [l for l in flat_clauses if -l not in flat_clauses]
 
@@ -114,7 +114,7 @@ def looping(clauses, assignment, type_of_heur, numloops):
 
         # keep going untill there arent pure literals left
         if len(pure_literals) != 0:
-            return looping(clauses, assignment, type_of_heur, numloops)
+            return looping(clauses, assignment, type_of_heur, num_loops, num_assigns, num_backtrack)
 
     #1.3 check unit clauses
     #take all the literal that are unit clauses and rewrite the clauses where these unit clauses are in
@@ -129,33 +129,37 @@ def looping(clauses, assignment, type_of_heur, numloops):
 
     #keep going untill there arent unit clauses left
     if len(unit_literals) != 0:
-      return looping(clauses, assignment, type_of_heur, numloops)
+      return looping(clauses, assignment, type_of_heur, num_loops, num_assigns, num_backtrack)
 
     if type_of_heur == "heur1":
-      chosen_literal = MOM_heuristic1(clauses)
+      chosen_literal = heuristic1(clauses)
     elif type_of_heur == "heur2":
-      chosen_literal = MOM_heuristic2(clauses)
+      chosen_literal = heuristic2(clauses)
     else:
       chosen_literal = random_assignment(clauses)
-
+    num_assigns += 1
     new_clauses, new_assignment = rewrite_clause(clauses, assignment, chosen_literal, False)
 
-    if not looping(new_clauses, new_assignment, type_of_heur, numloops):
+    if not looping(new_clauses, new_assignment, type_of_heur, num_loops, num_assigns, num_backtrack):
+        num_backtrack += 1
         new_clauses, new_assignment = rewrite_clause(clauses, assignment, -chosen_literal, True)
-        return looping(new_clauses, new_assignment, type_of_heur, numloops)
-    return True
+        return looping(new_clauses, new_assignment, type_of_heur, num_loops, num_assigns, num_backtrack)
+    return num_loops, num_assigns, num_backtrack
 
 
 def dpll(clauses, assignment, type_of_heur):
     # The following code is derived from slide 10 of '2a Davis Putnam'
     # 1.1 remove tautologies
-    numloops = 0
+    num_loops = 0
+    num_assigns = 0
+    num_backtrack = 0
+    #clauses = list(set([clause for clause in clauses for l in clause if not -l in clause]))
     for clause in clauses:
         for literal in clause:
           if -literal in clause:
             clauses.remove(clause)
-
-    looping(clauses, assignment, type_of_heur, numloops)
+    num_loops, num_assigns, num_backtrack = looping(clauses, assignment, type_of_heur, num_loops, num_assigns, num_backtrack)
+    return num_loops, num_assigns, num_backtrack
 
 
 
@@ -164,7 +168,7 @@ def random_assignment(clauses):
   random_literal = np.random.choice([l for clause in clauses for l in clause])
   return random_literal
 
-def MOM_heuristic1(clauses):
+def heuristic1(clauses):
   #implementing the normal MOM formula: [f∗(x) + f∗(¬x)] ∗ 2k + f∗(x) ∗ f∗(¬x)
   # first determine what the size is of the smallest clauses
   smallest_size_clause = min(set([len(clause) for clause in clauses]))
@@ -183,76 +187,52 @@ def MOM_heuristic1(clauses):
   #return the key with the maximal value in the dict
   return max(score_mom_heur, key=score_mom_heur.get)
 
-def MOM_heuristic2(clauses):
+def heuristic2(clauses):
   # TODO: still to be implemented
   return 0
 
+def create_csv_file(name_file):
+    #this creates a csv in the same directory folder
+    with open(name_file, 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Run", "CPU Time", "Number of Loops", "Number of Assigns", "Number of Backtracks"])
+
+def write_line_to_csv(cpu_time, num_loops, num_assigns, num_backtrack, num_run, name_file):
+    with open(name_file, 'a+', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow([num_run, cpu_time, num_loops, num_assigns, num_backtrack])
 
 
+
+    #implemeted in such a way that it adds a single line every time
 
 
 if __name__ == '__main__':
-  input_dir = "test_sudokus"
-  file_name = '100 sudokus.txt'
-  output_dir = "encoded"
-  #encode_sudoku(input_dir, file_name, output_dir)
-  example, rule, assignment = read_dimacs_file("encoded//100 sudokus.txt-0000.cnf")
+    num_run = 1
+    input_dir = "test_sudokus"
+    file_name = '100 sudokus.txt'
+    output_dir = "encoded"
+    heuristic = "heur1"
 
-  clauses = example + rule
-  start_time = time.time()
-  heuristic = "heur1"
-  dpll(clauses, assignment, heuristic)
-  print("--- %s seconds ---" % (time.time() - start_time))
+    name_csv_file = 'KR_Experiment_' + datetime.now().strftime("%d-%m-%Y-%H-%M-%S") + '.csv'
+    create_csv_file(name_csv_file)
 
+    #encode_sudoku(input_dir, file_name, output_dir)
 
 
-#  def select_absolute_literal(cnf):
-#   for clause in cnf:
-#     for literal in clause:
-#       return literal
-#
-#
-# def difference(list1, list2):
-#   if type(list2) == int:
-#     list2=[list2]
-#   return (list(list(set(list1)-set(list2)) + list(set(list2)-set(list1))))
-#
-# def dpll(cnf, assignments=[]):
-#   print("assignments: ", assignments, "   with len cnf: ",len(cnf))
-#
-#   if len(cnf) == 0:
-#     print("done with: ", assignments)
-#     return assignments
-#
-#   if any([len(c) == 0 for c in cnf]):
-#     return False, None
-#
-#   lit = select_absolute_literal(cnf)
-#
-#   new_cnf = [c for c in cnf if abs(lit) not in c]
-#   new_cnf = [difference(c, -abs(lit)) for c in new_cnf]
-#   assignments = assignments + [[abs(lit)]]
-#
-#   #remove duplicates
-#   assignments = [list(x) for x in set(frozenset(y) for y in assignments)]
-#   #do new loop
-#   sat, vals = dpll(new_cnf, assignments)
-#
-#
-#   if sat:
-#     return sat, vals
-#
-#   new_cnf = [c for c in cnf if -abs(lit) not in c]
-#
-#   new_cnf = [difference(c, abs(lit)) for c in new_cnf]
-#   assignments = assignments + [[-abs(lit)]]
-#
-#   #remove duplicates
-#   assignments = [list(x) for x in set(frozenset(y) for y in assignments)]
-#   #do new loop
-#   sat, vals = dpll(new_cnf, assignments)
-#
-#   if sat:
-#     return sat, vals
-#
-#   return False, None
+    #change this loop into looping through the different sudokus
+    for x in range(2):
+
+        start_time = time.time()
+
+        example, rule, assignment = read_dimacs_file("encoded//100 sudokus.txt-0000.cnf")
+        clauses = example + rule
+
+        num_loops, num_assigns, num_backtrack = dpll(clauses, assignment, heuristic)
+
+        cpu_time = (time.time() - start_time)
+        write_line_to_csv(cpu_time, num_loops, num_assigns, num_backtrack, num_run, name_csv_file)
+        print('Run number ', num_run, ' done. ')
+        num_run += 1
+    #end the loop here
+
