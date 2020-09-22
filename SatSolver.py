@@ -12,12 +12,12 @@ from collections import Counter
 from datetime import datetime
 sys.setrecursionlimit(12500)
 
-def read_dimacs_file(input_file):
+def read_dimacs_file(input_file, rule_file):
   try:
     # Read the DIMACS files
     #input_file = sys.argv[1]
     example = mxklabs.dimacs.read(input_file)
-    rules = mxklabs.dimacs.read("input//sudoku-rules.txt")
+    rules = mxklabs.dimacs.read(rule_file)
 
     #create a dictionary with keys as every option in sodoku and value yet to be assigned
     num_digits = len(str(example.num_vars))
@@ -44,7 +44,7 @@ def encode_sudoku(input_dir: str, file_name: str, output_dir: str):
     if not size.is_integer():
       print("Sudoku '{0}' does not have square dimensions.".format(sudoku))
       continue
-
+  
     row_counter = 1
     column_counter = 0
     clauses = []
@@ -155,11 +155,12 @@ def dpll(clauses, assignment, type_of_heur):
     num_backtrack = 0
     #clauses = list(set([clause for clause in clauses for l in clause if not -l in clause]))
     for clause in clauses:
-        for literal in clause:
-          if -literal in clause:
-            clauses.remove(clause)
+       for literal in clause:
+            if -literal in clause:
+                 clauses.remove(clause)
     num_loops, num_assigns, num_backtrack = looping(clauses, assignment, type_of_heur, num_loops, num_assigns, num_backtrack)
     return num_loops, num_assigns, num_backtrack
+    
 
 
 
@@ -188,8 +189,14 @@ def heuristic1(clauses):
   return max(score_mom_heur, key=score_mom_heur.get)
 
 def heuristic2(clauses):
-  # TODO: still to be implemented
-  return 0
+    max_unsat_clause = {}
+    for clause in clauses:
+        for literal in clause:
+            if literal in max_unsat_clause:
+                max_unsat_clause[literal] += 1
+            else:
+                max_unsat_clause[literal] = 1
+    return max(max_unsat_clause, key=max_unsat_clause.get)
 
 def create_csv_file(name_file):
     #this creates a csv in the same directory folder
@@ -201,38 +208,35 @@ def write_line_to_csv(cpu_time, num_loops, num_assigns, num_backtrack, num_run, 
     with open(name_file, 'a+', newline='') as file:
         writer = csv.writer(file)
         writer.writerow([num_run, cpu_time, num_loops, num_assigns, num_backtrack])
-
-
-
     #implemeted in such a way that it adds a single line every time
 
 
 if __name__ == '__main__':
     num_run = 1
-    input_dir = "test_sudokus"
-    file_name = '100 sudokus.txt'
-    output_dir = "encoded"
-    heuristic = "heur1"
+    input_dir = "test_sudokus"  #Directory which contains sudoku text files
+    file_name = '100 sudokus.txt'  #Name of sudoku files which contains different games in string format
+    output_dir = "encoded" #Output directory - sudoku in dimacs format
+    heuristic = "heur2" #type of heuristic { heur1 - MOM, heur2 - DLIS, any other optionr - RANDOM }
+    clauses_file = "input//sudoku-rules2.txt"
 
     name_csv_file = 'KR_Experiment_' + datetime.now().strftime("%d-%m-%Y-%H-%M-%S") + '.csv'
     create_csv_file(name_csv_file)
 
-    #encode_sudoku(input_dir, file_name, output_dir)
-
-
-    #change this loop into looping through the different sudokus
-    for x in range(2):
-
-        start_time = time.time()
-
-        example, rule, assignment = read_dimacs_file("encoded//100 sudokus.txt-0000.cnf")
-        clauses = example + rule
-
-        num_loops, num_assigns, num_backtrack = dpll(clauses, assignment, heuristic)
-
-        cpu_time = (time.time() - start_time)
-        write_line_to_csv(cpu_time, num_loops, num_assigns, num_backtrack, num_run, name_csv_file)
-        print('Run number ', num_run, ' done. ')
-        num_run += 1
-    #end the loop here
+    encode_sudoku(input_dir, file_name, output_dir)
+    filenames = next(os.walk(output_dir))[2]  #Reads all the file names present in output directory
+    for file in filenames:
+        try:
+            if(file_name in file): #it makes sure that code is using encoded form of the current sudoku input text file
+                start_time = time.time()
+                example, rule, assignment = read_dimacs_file(output_dir+"/"+file, clauses_file)
+                clauses = example + rule
+                num_loops, num_assigns, num_backtrack = dpll(clauses, assignment, heuristic)
+                
+                cpu_time = (time.time() - start_time)
+                write_line_to_csv(cpu_time, num_loops, num_assigns, num_backtrack, num_run, name_csv_file)
+                print('Run number ', num_run, ' done. ')
+                num_run += 1
+        except Exception as e:
+            print("Something went wrong with ", file)
+#    #end the loop here
 
