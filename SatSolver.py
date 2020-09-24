@@ -10,63 +10,66 @@ import sys
 import csv
 from collections import Counter
 from datetime import datetime
+
 sys.setrecursionlimit(12500)
 
+
 def read_dimacs_file(input_file, rule_file):
-  try:
-    # Read the DIMACS files
-    #input_file = sys.argv[1]
-    example = mxklabs.dimacs.read(input_file)
-    rules = mxklabs.dimacs.read(rule_file)
+    try:
+        # Read the DIMACS files
+        # input_file = sys.argv[1]
+        example = mxklabs.dimacs.read(input_file)
+        rules = mxklabs.dimacs.read(rule_file)
 
-    #create a dictionary with keys as every option in sodoku and value yet to be assigned
-    num_digits = len(str(example.num_vars))
-    minimal_literal = int(num_digits*str(1))
-    maximal_literal = int(num_digits * str(str(example.num_vars)[0]))
-    value = None
-    assignment = {k:value for k in range(minimal_literal, maximal_literal + 1)}
-    #we can set the literals already to true of it is in the example
-    for givenSudokuNum in example.clauses:
-       assignment[givenSudokuNum[0]] = True
-    return example.clauses, rules.clauses, assignment
+        # create a dictionary with keys as every option in sodoku and value yet to be assigned
+        num_digits = len(str(example.num_vars))
+        minimal_literal = int(num_digits * str(1))
+        maximal_literal = int(num_digits * str(str(example.num_vars)[0]))
+        value = None
+        assignment = {k: value for k in range(minimal_literal, maximal_literal + 1)}
+        # we can set the literals already to true of it is in the example
+        for givenSudokuNum in example.clauses:
+            assignment[givenSudokuNum[0]] = True
+        return example.clauses, rules.clauses, assignment
 
-  except Exception as e:
-    # Report error.
-    print(e)
+    except Exception as e:
+        # Report error.
+        print(e)
 
 
 def encode_sudoku(input_dir: str, file_name: str, output_dir: str):
-  input_file: IO = open(input_dir + "/" + file_name, "r")
-  for i, sudoku in enumerate(input_file):
-    sudoku: str = re.sub('[^1-9A-Z.]', '', sudoku)
-    size: float = math.sqrt(len(sudoku))
-    # Check Sudoku dimensions
-    if not size.is_integer():
-      print("Sudoku '{0}' does not have square dimensions.".format(sudoku))
-      continue
-  
-    row_counter = 1
-    column_counter = 0
-    clauses = []
-    for token in sudoku:
-      if column_counter != size:
-        column_counter += 1
-      else:
-        row_counter += 1
-        column_counter = 1
+    input_file: IO = open(input_dir + "/" + file_name, "r")
+    for i, sudoku in enumerate(input_file):
+        sudoku: str = re.sub('[^1-9A-Z.]', '', sudoku)
+        size: float = math.sqrt(len(sudoku))
+        # Check Sudoku dimensions
+        if not size.is_integer():
+            print("Sudoku '{0}' does not have square dimensions.".format(sudoku))
+            continue
 
-      if token != '.':
-        clause = (str(row_counter) + str(column_counter) + str(token)).replace(" ", "")
-        clauses.append(re.sub(r"[^\w\s]", '', clause))
+        row_counter = 1
+        column_counter = 0
+        clauses = []
+        for token in sudoku:
+            if column_counter != size:
+                column_counter += 1
+            else:
+                row_counter += 1
+                column_counter = 1
 
-    if not os.path.exists(output_dir):
-      os.makedirs(output_dir)
-    output_file_name: str = os.path.join(output_dir, file_name + '-' + str(i).rjust(4, '0') + '.cnf')
-    output_file: IO = open(output_file_name, 'w')
-    output_file.write("p cnf {} {}\n".format(str(int(size)) * 3, len(clauses)))
-    for clause in clauses:
-      output_file.write("".join(clause) + " 0\n")
-    output_file.close()
+            if token != '.':
+                clause = (str(row_counter) + str(column_counter) + str(token)).replace(" ", "")
+                clauses.append(re.sub(r"[^\w\s]", '', clause))
+
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        output_file_name: str = os.path.join(output_dir, file_name + '-' + str(i).rjust(4, '0') + '.cnf')
+        output_file: IO = open(output_file_name, 'w')
+        output_file.write("p cnf {} {}\n".format(str(int(size)) * 3, len(clauses)))
+        for clause in clauses:
+            output_file.write("".join(clause) + " 0\n")
+        output_file.close()
+
 
 def rewrite_clause(clauses, assignment, literal, backtrack_allowence_bool):
     assignment = copy.deepcopy(assignment)
@@ -93,14 +96,13 @@ def rewrite_clause(clauses, assignment, literal, backtrack_allowence_bool):
 
 
 def looping(clauses, assignment, type_of_heur, num_loops, num_assigns, num_backtrack):
-
-    num_loops+=1
+    num_loops += 1
     are_empty_clauses = len([clause for clause in clauses if not clause]) > 0
-    if are_empty_clauses: return False
+    if are_empty_clauses:
+        return False, num_loops, num_assigns, num_backtrack
     elif len(clauses) == 0:
         print("SATISFIED with assignment: ", [k for k, v in assignment.items() if assignment[k] == True])
-        return True
-
+        return True, num_loops, num_assigns, num_backtrack
 
     # 1.2 check pure literals
     # However, checking pure literals for first loop seems redundant as there is no pure literal present initially
@@ -116,35 +118,36 @@ def looping(clauses, assignment, type_of_heur, num_loops, num_assigns, num_backt
         if len(pure_literals) != 0:
             return looping(clauses, assignment, type_of_heur, num_loops, num_assigns, num_backtrack)
 
-    #1.3 check unit clauses
-    #take all the literal that are unit clauses and rewrite the clauses where these unit clauses are in
+    # 1.3 check unit clauses
+    # take all the literal that are unit clauses and rewrite the clauses where these unit clauses are in
     unit_literals = [clause[0] for clause in clauses if len(clause) == 1]
     for unit_literal in unit_literals:
-      clauses, assignment = rewrite_clause(clauses, assignment, unit_literal, False)
+        clauses, assignment = rewrite_clause(clauses, assignment, unit_literal, False)
 
-    #if the above code returns false for the assignment, the sudoku for the literal assingment is not satisfiable
+    # if the above code returns false for the assignment, the sudoku for the literal assingment is not satisfiable
     if assignment == False:
-      print("UNSAT")
-      return False
+        print("UNSAT")
+        return False, num_loops, num_assigns, num_backtrack
 
-    #keep going untill there arent unit clauses left
+    # keep going untill there arent unit clauses left
     if len(unit_literals) != 0:
-      return looping(clauses, assignment, type_of_heur, num_loops, num_assigns, num_backtrack)
+        return looping(clauses, assignment, type_of_heur, num_loops, num_assigns, num_backtrack)
 
     if type_of_heur == "heur1":
-      chosen_literal = heuristic1(clauses)
+        chosen_literal = heuristic1(clauses)
     elif type_of_heur == "heur2":
-      chosen_literal = heuristic2(clauses)
+        chosen_literal = heuristic2(clauses)
     else:
-      chosen_literal = random_assignment(clauses)
+        chosen_literal = random_assignment(clauses)
     num_assigns += 1
     new_clauses, new_assignment = rewrite_clause(clauses, assignment, chosen_literal, False)
 
-    if not looping(new_clauses, new_assignment, type_of_heur, num_loops, num_assigns, num_backtrack):
+    satisfied, num_loops, num_assigns, num_backtrack = looping(new_clauses, new_assignment, type_of_heur, num_loops, num_assigns, num_backtrack)
+    if not satisfied:
         num_backtrack += 1
         new_clauses, new_assignment = rewrite_clause(clauses, assignment, -chosen_literal, True)
         return looping(new_clauses, new_assignment, type_of_heur, num_loops, num_assigns, num_backtrack)
-    return num_loops, num_assigns, num_backtrack
+    return True, num_loops, num_assigns, num_backtrack
 
 
 def dpll(clauses, assignment, type_of_heur):
@@ -153,40 +156,43 @@ def dpll(clauses, assignment, type_of_heur):
     num_loops = 0
     num_assigns = 0
     num_backtrack = 0
-    #clauses = list(set([clause for clause in clauses for l in clause if not -l in clause]))
+    # clauses = list(set([clause for clause in clauses for l in clause if not -l in clause]))
     for clause in clauses:
-       for literal in clause:
+        for literal in clause:
             if -literal in clause:
-                 clauses.remove(clause)
-    num_loops, num_assigns, num_backtrack = looping(clauses, assignment, type_of_heur, num_loops, num_assigns, num_backtrack)
-    return num_loops, num_assigns, num_backtrack
-    
-
+                clauses.remove(clause)
+    satisfied, num_loops, num_assigns, num_backtrack = looping(clauses, assignment, type_of_heur, num_loops, num_assigns,
+                                                    num_backtrack)
+    return satisfied, num_loops, num_assigns, num_backtrack
 
 
 def random_assignment(clauses):
-  # set one literal to true to explore if satifiable
-  random_literal = np.random.choice([l for clause in clauses for l in clause])
-  return random_literal
+    # set one literal to true to explore if satifiable
+    random_literal = np.random.choice([l for clause in clauses for l in clause])
+    return random_literal
+
 
 def heuristic1(clauses):
-  #implementing the normal MOM formula: [f∗(x) + f∗(¬x)] ∗ 2k + f∗(x) ∗ f∗(¬x)
-  # first determine what the size is of the smallest clauses
-  smallest_size_clause = min(set([len(clause) for clause in clauses]))
-  #select only the literals which are in the smallest clauses, and then count all these values
-  counted_lits_in_smallest_clauses = Counter([l for clause in clauses for l in clause if len(clause) == smallest_size_clause])
-  score_mom_heur = dict()
-  #TODO: k still to be determined
-  k = 10
-  for key, count in list(counted_lits_in_smallest_clauses.items()):
-    #here is the function
-    score = (count + counted_lits_in_smallest_clauses[-key]) * 2^k + count * counted_lits_in_smallest_clauses[-key]
-    # delete the opposite count of the literal, as this is not necessary to perform the formula, becuase it will give the same value as the intitial literal
-    del counted_lits_in_smallest_clauses[-key]
-    #add the score of the literal to the dict
-    score_mom_heur[abs(key)] = score
-  #return the key with the maximal value in the dict
-  return max(score_mom_heur, key=score_mom_heur.get)
+    # implementing the normal MOM formula: [f∗(x) + f∗(¬x)] ∗ 2k + f∗(x) ∗ f∗(¬x)
+    # first determine what the size is of the smallest clauses
+    smallest_size_clause = min(set([len(clause) for clause in clauses]))
+    # select only the literals which are in the smallest clauses, and then count all these values
+    counted_lits_in_smallest_clauses = Counter(
+        [l for clause in clauses for l in clause if len(clause) == smallest_size_clause])
+    score_mom_heur = dict()
+    # TODO: k still to be determined
+    k = 10
+    for key, count in list(counted_lits_in_smallest_clauses.items()):
+        # here is the function
+        score = (count + counted_lits_in_smallest_clauses[-key]) * 2 ^ k + count * counted_lits_in_smallest_clauses[
+            -key]
+        # delete the opposite count of the literal, as this is not necessary to perform the formula, becuase it will give the same value as the intitial literal
+        del counted_lits_in_smallest_clauses[-key]
+        # add the score of the literal to the dict
+        score_mom_heur[abs(key)] = score
+    # return the key with the maximal value in the dict
+    return max(score_mom_heur, key=score_mom_heur.get)
+
 
 def heuristic2(clauses):
     max_unsat_clause = {}
@@ -198,45 +204,47 @@ def heuristic2(clauses):
                 max_unsat_clause[literal] = 1
     return max(max_unsat_clause, key=max_unsat_clause.get)
 
+
 def create_csv_file(name_file):
-    #this creates a csv in the same directory folder
+    # this creates a csv in the same directory folder
     with open(name_file, 'w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(["Run", "CPU Time", "Number of Loops", "Number of Assigns", "Number of Backtracks"])
+
 
 def write_line_to_csv(cpu_time, num_loops, num_assigns, num_backtrack, num_run, name_file):
     with open(name_file, 'a+', newline='') as file:
         writer = csv.writer(file)
         writer.writerow([num_run, cpu_time, num_loops, num_assigns, num_backtrack])
-    #implemeted in such a way that it adds a single line every time
+    # implemeted in such a way that it adds a single line every time
 
 
 if __name__ == '__main__':
     num_run = 1
-    input_dir = "test_sudokus"  #Directory which contains sudoku text files
-    file_name = '100 sudokus.txt'  #Name of sudoku files which contains different games in string format
-    output_dir = "encoded" #Output directory - sudoku in dimacs format
-    heuristic = "heur2" #type of heuristic { heur1 - MOM, heur2 - DLIS, any other optionr - RANDOM }
-    clauses_file = "input//sudoku-rules2.txt"
+    input_dir = "test_sudokus"  # Directory which contains sudoku text files
+    file_name = '100 sudokus.txt'  # Name of sudoku files which contains different games in string format
+    output_dir = "encoded"  # Output directory - sudoku in dimacs format
+    heuristic = "heur2"  # type of heuristic { heur1 - MOM, heur2 - DLIS, any other optionr - RANDOM }
+    clauses_file = "input//sudoku-rules.txt"
 
     name_csv_file = 'KR_Experiment_' + datetime.now().strftime("%d-%m-%Y-%H-%M-%S") + '.csv'
     create_csv_file(name_csv_file)
 
     encode_sudoku(input_dir, file_name, output_dir)
-    filenames = next(os.walk(output_dir))[2]  #Reads all the file names present in output directory
+    filenames = next(os.walk(output_dir))[2]  # Reads all the file names present in output directory
     for file in filenames:
         try:
-            if(file_name in file): #it makes sure that code is using encoded form of the current sudoku input text file
+            if (
+                    file_name in file):  # it makes sure that code is using encoded form of the current sudoku input text file
                 start_time = time.time()
-                example, rule, assignment = read_dimacs_file(output_dir+"/"+file, clauses_file)
+                example, rule, assignment = read_dimacs_file(output_dir + "/" + file, clauses_file)
                 clauses = example + rule
-                num_loops, num_assigns, num_backtrack = dpll(clauses, assignment, heuristic)
-                
+
+
+                satisfied, num_loops, num_assigns, num_backtrack = dpll(clauses, assignment, heuristic)
                 cpu_time = (time.time() - start_time)
                 write_line_to_csv(cpu_time, num_loops, num_assigns, num_backtrack, num_run, name_csv_file)
                 print('Run number ', num_run, ' done. ')
                 num_run += 1
         except Exception as e:
-            print("Something went wrong with ", file)
-#    #end the loop here
-
+            print("Something went wrong with ", file, e)
