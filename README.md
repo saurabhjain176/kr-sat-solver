@@ -17,4 +17,4 @@ File name of sudoku clauses in DIMACS format
 File name of sudoku game in DIMACS format
 
 ### Output
-Scripts creates .out files with solved sudoku
+Scripts creates .out file with solved sudoku
