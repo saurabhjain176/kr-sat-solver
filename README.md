@@ -1,4 +1,4 @@
-# SAT solver
+# SAT solver - This project was done as a part of course **Knowledge Representation** at **Vrije University, Amsterdam**.
 
 ## Project 1 (SAT)
 
